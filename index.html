@@ -238,6 +238,7 @@
             };
 
             trades.push(newTrade);
+            sendDataToGoogleSheet(newTrade);
             saveData();
             updateUI();
             clearForm();
@@ -355,6 +356,34 @@
             // Vẽ lại đồ thị đường tăng trưởng vốn
             renderChart(chartLabels, equityData);
         }
+        // --- ĐOẠN CODE KẾT NỐI GOOGLE SHEETS TỰ ĐỘNG ---
+const scriptURL = 'https://script.google.com/macros/s/AKfycbwU1gPuNSB99qtFnlz_WplXaIC4trZvbhZv3J8g-W24hq3cTkjxysI4I9EU_Qu2Ku66/exec';
+
+function sendDataToGoogleSheet(tradeData) {
+    // Chuyển đổi dữ liệu form thành định dạng Google Sheet nhận diện
+    const payload = {
+        ngay: tradeData.date || '',
+        cap_tien: tradeData.asset || '',
+        loai_lenh: tradeData.type || '',
+        khoi_luong: tradeData.lotSize || '1', // Sửa theo tên biến khối lượng của bạn nếu có
+        loi_nhuan: tradeData.pnl || '0',
+        ghi_chu: tradeData.notes || ''
+    };
+
+    fetch(scriptURL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(() => {
+        console.log('Đã đồng bộ lệnh thành công lên Google Sheets!');
+    })
+    .catch(error => console.error('Lỗi kết nối dữ liệu:', error));
+}
+// -----------------------------------------------
 
         // Xử lý đồ thị tăng trưởng bằng Chart.js
         function renderChart(labels, data) {
