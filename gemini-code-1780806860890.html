@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Journal Pro - Nhật Ký & Quản Lý Vốn</title>
+    <!-- Tailwind CSS để giao diện đẹp mượt mà trên cả Điện thoại và Máy tính -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Chart.js để vẽ biểu đồ tài khoản -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen pb-12">
+
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 px-4 py-3 shadow-lg">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent flex items-center gap-2">
+                📊 TRADING JOURNAL PRO
+            </h1>
+            <div class="flex gap-2">
+                <button onclick="exportCSV()" class="bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 font-semibold py-2 px-3 rounded-lg border border-slate-700 transition">
+                    📥 Xuất Excel
+                </button>
+                <button onclick="resetJournal()" class="bg-red-950/40 hover:bg-red-900/60 text-xs text-red-400 font-semibold py-2 px-3 rounded-lg border border-red-900/50 transition">
+                    🗑️ Xóa hết
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- CỘT 1 & 2: THỐNG KÊ & BIỂU ĐỒ -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Thẻ Thống Kê Nhanh -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
+                    <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Số Vốn Hiện Tại</p>
+                    <p id="stat-balance" class="text-xl font-bold text-emerald-400 mt-1">$1,000.00</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
+                    <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Tỷ Lệ Win</p>
+                    <p id="stat-winrate" class="text-xl font-bold text-cyan-400 mt-1">0%</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
+                    <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Hệ Số Kỳ Vọng</p>
+                    <p id="stat-expectancy" class="text-xl font-bold text-purple-400 mt-1">0.00 R</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
+                    <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Tổng Số Lệnh</p>
+                    <p id="stat-total" class="text-xl font-bold text-slate-300 mt-1">0</p>
+                </div>
+            </div>
+
+            <!-- Biểu Đồ Tăng Trưởng Vốn (Equity Curve) -->
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
+                <h3 class="text-sm font-semibold text-slate-300 mb-3">Biểu Đồ Tăng Trưởng Tài Khoản</h3>
+                <div class="h-64 w-full">
+                    <canvas id="equityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Bảng Lịch Sử Giao Dịch -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-md overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                    <h3 class="text-sm font-semibold text-slate-300">Nhật Ký Lệnh Giao Dịch</h3>
+                    <span id="order-count" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">0 lệnh</span>
+                </div>
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-800 bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                                <th class="p-3">Sản phẩm</th>
+                                <th class="p-3">Loại</th>
+                                <th class="p-3">Entry / SL / TP</th>
+                                <th class="p-3">Kết quả ($ / R)</th>
+                                <th class="p-3">Ghi chú</th>
+                                <th class="p-3 text-center">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody id="journal-tbody" class="text-sm divide-y divide-slate-800/60">
+                            <!-- Lệnh sẽ tự động thêm vào đây bằng JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- CỘT 3: FORM NHẬP LỆNH & MÁY TÍNH QUẢN LÝ VỐN -->
+        <div class="space-y-6">
+            
+            <!-- Cấu Hình Vốn Ban Đầu -->
+            <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-md">
+                <h3 class="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">⚙️ Cấu Hình Tài Khoản</h3>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Số vốn ban đầu ($)</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="init-balance-input" value="1000" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                        <button onclick="setInitialBalance()" class="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold px-4 py-2 rounded-lg text-slate-950 transition">Đặt lại</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Nhập Lệnh Mới -->
+            <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-md space-y-4">
+                <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">📝 Ghi Chép Lệnh Mới</h3>
+                
+                <!-- Sản phẩm (Hỗ trợ tìm kiếm tự do tương thích mọi mã TradingView) -->
+                <div class="relative">
+                    <label class="block text-xs text-slate-400 mb-1">Mã Sản Phẩm (TradingView Ticker)</label>
+                    <input type="text" id="trade-asset" placeholder="Ví dụ: XAUUSD, JP225, BTCUSD, AAPL..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm uppercase text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500">
+                </div>
+
+                <!-- Loại lệnh & Rủi ro -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Vị thế</label>
+                        <select id="trade-type" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+                            <option value="BUY">BUY (Long)</option>
+                            <option value="SELL">SELL (Short)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Rủi ro mỗi lệnh (%)</label>
+                        <input type="number" id="trade-risk-pct" value="1" step="0.1" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+
+                <!-- Thông số Kỹ thuật -->
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Điểm vào (Entry)</label>
+                        <input type="number" id="trade-entry" step="any" placeholder="0.0" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-sm text-slate-200 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Cắt lỗ (SL)</label>
+                        <input type="number" id="trade-sl" step="any" placeholder="0.0" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-sm text-slate-200 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Chốt lời (TP)</label>
+                        <input type="number" id="trade-tp" step="any" placeholder="0.0" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-sm text-slate-200 focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Kết Quả Lệnh -->
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Kết Quả Lệnh</label>
+                    <select id="trade-status" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="WIN">WIN (Thắng chuẩn TP hoặc chốt tay dương)</option>
+                        <option value="LOSS">LOSS (Thua chuẩn SL hoặc cắt lỗ tay)</option>
+                        <option value="BE">BE (Hòa vốn / Bằng vốn)</option>
+                    </select>
+                </div>
+
+                <!-- Lợi nhuận thực tế nhận được (Đổi thành tiền mặt hoặc số R) -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Tiền Thắng/Thua ($)</label>
+                        <input type="number" id="trade-pnl" step="any" placeholder="Ví dụ: +50 hoặc -20" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Số R đạt được (R-Multiplier)</label>
+                        <input type="number" id="trade-r-mult" step="0.1" placeholder="Ví dụ: 2.5 hoặc -1" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Ghi chú / Lý do vào lệnh -->
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Ghi chú chiến lược / Lý do vào lệnh</label>
+                    <textarea id="trade-notes" rows="2" placeholder="Mô tả thiết lập lệnh (ví dụ: Chạm hỗ trợ khung H4, RSI phân kỳ, đúng trendline...)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none"></textarea>
+                </div>
+
+                <button onclick="addTrade()" class="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold py-2.5 rounded-lg text-sm shadow-md hover:opacity-90 transition">
+                    ➕ Thêm Lệnh Vào Nhật Ký
+                </button>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Khởi tạo biến lưu trữ dữ liệu
+        let initialBalance = parseFloat(localStorage.getItem('init_balance')) || 1000;
+        let trades = JSON.parse(localStorage.getItem('trades_data')) || [];
+        let chartInstance = null;
+
+        document.getElementById('init-balance-input').value = initialBalance;
+
+        // Hàm cập nhật số vốn ban đầu
+        function setInitialBalance() {
+            const val = parseFloat(document.getElementById('init-balance-input').value);
+            if (!isNaN(val) && val > 0) {
+                initialBalance = val;
+                localStorage.setItem('init_balance', initialBalance);
+                updateUI();
+            }
+        }
+
+        // Hàm thêm lệnh mới
+        function addTrade() {
+            const asset = document.getElementById('trade-asset').value.trim().toUpperCase();
+            const type = document.getElementById('trade-type').value;
+            const riskPct = parseFloat(document.getElementById('trade-risk-pct').value) || 0;
+            const entry = parseFloat(document.getElementById('trade-entry').value) || 0;
+            const sl = parseFloat(document.getElementById('trade-sl').value) || 0;
+            const tp = parseFloat(document.getElementById('trade-tp').value) || 0;
+            const status = document.getElementById('trade-status').value;
+            let pnl = parseFloat(document.getElementById('trade-pnl').value) || 0;
+            let rMult = parseFloat(document.getElementById('trade-r-mult').value) || 0;
+            const notes = document.getElementById('trade-notes').value.trim();
+
+            if (!asset) {
+                alert("Vui lòng điền mã sản phẩm giao dịch!");
+                return;
+            }
+
+            // Tự động gán dấu dựa trên trạng thái lệnh nếu người dùng quên nhập dấu trừ
+            if (status === 'LOSS') {
+                if (pnl > 0) pnl = -pnl;
+                if (rMult > 0) rMult = -rMult;
+                if (pnl === 0 && rMult === 0) rMult = -1; // Mặc định mất 1R nếu không nhập cụ thể
+            } else if (status === 'BE') {
+                pnl = 0;
+                rMult = 0;
+            }
+
+            const newTrade = {
+                id: Date.now(),
+                date: new Date().toLocaleDateString('vi-VN'),
+                asset, type, riskPct, entry, sl, tp, status, pnl, rMult, notes
+            };
+
+            trades.push(newTrade);
+            saveData();
+            updateUI();
+            clearForm();
+        }
+
+        // Xóa một lệnh cụ thể
+        function deleteTrade(id) {
+            trades = trades.filter(t => t.id !== id);
+            saveData();
+            updateUI();
+        }
+
+        // Lưu dữ liệu vào trình duyệt
+        function saveData() {
+            localStorage.setItem('trades_data', JSON.stringify(trades));
+        }
+
+        // Xóa sạch nhật ký dữ liệu
+        function resetJournal() {
+            if (confirm("Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu giao dịch đã ghi chép không? Hành động này không thể hoàn tác.")) {
+                trades = [];
+                saveData();
+                updateUI();
+            }
+        }
+
+        // Reset form sau khi thêm
+        function clearForm() {
+            document.getElementById('trade-asset').value = '';
+            document.getElementById('trade-entry').value = '';
+            document.getElementById('trade-sl').value = '';
+            document.getElementById('trade-tp').value = '';
+            document.getElementById('trade-pnl').value = '';
+            document.getElementById('trade-r-mult').value = '';
+            document.getElementById('trade-notes').value = '';
+        }
+
+        // Cập nhật tất cả các thông số thống kê và giao diện bảng, biểu đồ
+        function updateUI() {
+            let currentBalance = initialBalance;
+            let winCount = 0;
+            let lossCount = 0;
+            let totalR = 0;
+            
+            const tbody = document.getElementById('journal-tbody');
+            tbody.innerHTML = '';
+
+            const equityData = [initialBalance];
+            const chartLabels = ['Vốn Gốc'];
+
+            // Sắp xếp lệnh theo thời gian để tính toán Equity curve chuẩn xác
+            trades.forEach((trade, index) => {
+                currentBalance += trade.pnl;
+                equityData.push(currentBalance);
+                chartLabels.push(`Lệnh ${index + 1}`);
+
+                if (trade.status === 'WIN') winCount++;
+                if (trade.status === 'LOSS') lossCount++;
+                totalR += trade.rMult;
+
+                // Màu sắc hiển thị cho trạng thái
+                let statusBadge = '';
+                if (trade.status === 'WIN') statusBadge = `<span class="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded text-xs font-semibold">WIN</span>`;
+                else if (trade.status === 'LOSS') statusBadge = `<span class="bg-red-950 text-red-400 px-2 py-0.5 rounded text-xs font-semibold">LOSS</span>`;
+                else statusBadge = `<span class="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-xs font-semibold">BE</span>`;
+
+                const pnlClass = trade.pnl > 0 ? 'text-emerald-400' : (trade.pnl < 0 ? 'text-red-400' : 'text-slate-400');
+                const rClass = trade.rMult > 0 ? 'text-emerald-500' : (trade.rMult < 0 ? 'text-red-500' : 'text-slate-500');
+
+                const row = `
+                    <tr class="hover:bg-slate-900/50 transition">
+                        <td class="p-3">
+                            <div class="font-bold text-slate-200">${trade.asset}</div>
+                            <div class="text-xxs text-slate-500">${trade.date}</div>
+                        </td>
+                        <td class="p-3">
+                            <span class="${trade.type === 'BUY' ? 'text-emerald-400' : 'text-red-400'} font-semibold text-xs">${trade.type}</span>
+                        </td>
+                        <td class="p-3 text-xs text-slate-400">
+                            <div>En: ${trade.entry}</div>
+                            <div class="text-slate-500">SL: ${trade.sl} | TP: ${trade.tp}</div>
+                        </td>
+                        <td class="p-3">
+                            <div class="${pnlClass} font-bold">${trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}$</div>
+                            <div class="${rClass} text-xs">${trade.rMult >= 0 ? '+' : ''}${trade.rMult}R</div>
+                        </td>
+                        <td class="p-3 text-xs text-slate-400 max-w-xs truncate" title="${trade.notes}">
+                            ${statusBadge} <span class="ml-1">${trade.notes || '-'}</span>
+                        </td>
+                        <td class="p-3 text-center">
+                            <button onclick="deleteTrade(${trade.id})" class="text-slate-600 hover:text-red-400 transition p-1">✕</button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+
+            // Tính toán tỷ lệ thống kê toán học
+            const totalTrades = trades.length;
+            const winrate = totalTrades > 0 ? ((winCount / totalTrades) * 100).toFixed(1) : 0;
+            
+            // Tính toán Hệ số kỳ vọng (Expectancy) = (Tỷ lệ Win * Trung bình Thắng) - (Tỷ lệ Loss * Trung bình Thua)
+            let expectancy = 0;
+            if (totalTrades > 0) {
+                expectancy = totalR / totalTrades;
+            }
+
+            // Gán dữ liệu lên Dashboard thống kê cao cấp
+            document.getElementById('stat-balance').innerText = `$${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('stat-winrate').innerText = `${winrate}%`;
+            document.getElementById('stat-expectancy').innerText = `${expectancy >= 0 ? '+' : ''}${expectancy.toFixed(2)} R`;
+            document.getElementById('stat-total').innerText = totalTrades;
+            document.getElementById('order-count').innerText = `${totalTrades} lệnh`;
+
+            // Vẽ lại đồ thị đường tăng trưởng vốn
+            renderChart(chartLabels, equityData);
+        }
+
+        // Xử lý đồ thị tăng trưởng bằng Chart.js
+        function renderChart(labels, data) {
+            const ctx = document.getElementById('equityChart').getContext('2d');
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Số dư tài khoản ($)',
+                        data: data,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: true,
+                        pointRadius: data.length > 20 ? 0 : 3,
+                        pointBackgroundColor: '#22d3ee'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } },
+                        y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        // Xuất file CSV mở được bằng Excel / Google Sheets khi cần đồng bộ dữ liệu
+        function exportCSV() {
+            if (trades.length === 0) {
+                alert("Chưa có dữ liệu giao dịch nào để xuất file!");
+                return;
+            }
+            let csvContent = "\uFEFF"; // Thêm BOM để tránh lỗi font tiếng Việt trong Excel
+            csvContent += "Ngày,Sản phẩm,Vị thế,Rủi ro (%),Entry,SL,TP,Trạng thái,Lợi nhuận ($),Số R,Ghi chú\n";
+            
+            trades.forEach(t => {
+                csvContent += `"${t.date}","${t.asset}","${t.type}","${t.riskPct}","${t.entry}","${t.sl}","${t.tp}","${t.status}","${t.pnl}","${t.rMult}","${t.notes || ''}"\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `trading_journal_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Tải trang lần đầu
+        updateUI();
+    </script>
+</body>
+</html>
